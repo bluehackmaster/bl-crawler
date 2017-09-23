@@ -17,7 +17,8 @@ with open('out.json') as data_file:
 values = []
 
 for idx, key in enumerate(data):
-    row_data = [str(idx), None, '', '', key['title'], key['img']]
+    row_data = [str(idx), key['url'], ",".join(key['category']), '', key['title'], key['img'], key['price'],
+                ",".join(key['detail_img'])]
     values.append(row_data)
 
 body = {
@@ -25,5 +26,9 @@ body = {
 }
 
 result = service.spreadsheets().values().update(
-    spreadsheetId=SPREAD_KEY, range="'test'!A2", body=body,
+    spreadsheetId=SPREAD_KEY, range="'stylenanda'!A204", body=body,
     valueInputOption='RAW').execute()
+
+
+def join_text(text):
+    text.join
