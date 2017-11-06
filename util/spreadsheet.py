@@ -10,25 +10,47 @@ scope = ['https://www.googleapis.com/auth/spreadsheets']
 credentials = ServiceAccountCredentials.from_json_keyfile_name(CLIENT_SECRET, scope)
 
 service = discovery.build('sheets', 'v4', credentials=credentials)
+start = 2
 
-with open('out.json') as data_file:
+print('Get json data from out.json file')
+with open('imvely.json') as data_file:
     data = json.load(data_file)
 
+print('total::' + str(len(data)))
+steps = int(round(len(data) / 500, 0))
+print('step::' + str(steps))
+print('starts to make a insert data for the google speradsheet')
+
 values = []
+inserted_image = []
+start_idx = end_idx = 0
 
-for idx, key in enumerate(data):
-    row_data = [str(idx), key['url'], ",".join(key['category']), '', key['title'], key['img'], key['price'],
-                ",".join(key['detail_img'])]
-    values.append(row_data)
+for step in range(0, steps):
+    if step is 0:
+        end_idx = 500
 
-body = {
-    'values': values
-}
+    print('step::' + str(step))
+    print('start_idx::' + str(start_idx))
+    print('end_idx::' + str(end_idx))
 
-result = service.spreadsheets().values().update(
-    spreadsheetId=SPREAD_KEY, range="'stylenanda'!A204", body=body,
-    valueInputOption='RAW').execute()
+    values = []
+    for key in data[start_idx: end_idx]:
+        row_data = [key['host_url'], ','.join(key['tag']), '', key['product_name'], key['image_url'],
+                    key['product_price'], key['currency_unit'],
+                    key['product_url'], key['product_no'], key['main'], key['nation']]
+        values.append(row_data)
 
+    body = {
+        'values': values
+    }
+    # print(values)
+    print('requesting to google api for inserting data')
+    result = service.spreadsheets().values().update(
+        spreadsheetId=SPREAD_KEY, range="'stylenanda_master'!A" + str(start), body=body,
+        valueInputOption='RAW').execute()
 
-def join_text(text):
-    text.join
+    start_idx += len(values)
+    end_idx += len(values)
+    start += len(values)
+    print(str(start))
+    print(result)
