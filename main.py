@@ -11,7 +11,7 @@ from stylelens_product.rest import ApiException
 from stylelens_crawl import Crawler
 from bluelens_log import Logging
 
-HEALTH_CHECK_TIME = 60
+HEALTH_CHECK_TIME = 60 * 60 * 24
 
 REDIS_HOST_CLASSIFY_QUEUE = 'bl:host:classify:queue'
 REDIS_HOST_CRAWL_QUEUE = 'bl:host:crawl:queue'
@@ -56,7 +56,7 @@ def exit():
 
 def crawl(host_code):
   options = {}
-  options['host_code'] = HOST_CODE
+  options['host_code'] = host_code
 
   crawler = Crawler(options)
 
