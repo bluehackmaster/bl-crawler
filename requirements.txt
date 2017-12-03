@@ -31,7 +31,7 @@ service-identity==17.0.0
 six==1.11.0
 slimit==0.8.1
 stylelens-crawl==0.0.102
-stylelens-product==1.0.17
+stylelens-product==1.0.21
 Twisted==17.9.0
 urllib3==1.22
 w3lib==1.18.0

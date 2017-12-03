@@ -57,10 +57,10 @@ def exit():
 
 def get_latest_crawl_version():
   key, value = rconn.hget(REDIS_CRAWL_VERSION, REDIS_CRAWL_VERSION_LATEST)
-  version_name = value.decode("utf-8")
-  return version_name
+  version_id = value.decode("utf-8")
+  return version_id
 
-def crawl(host_code, version_name):
+def crawl(host_code, version_id):
   options = {}
   options['host_code'] = host_code
 
@@ -91,15 +91,15 @@ def crawl(host_code, version_name):
       res = product_api.update_product_by_hostcode_and_productno(product,
                                                                  host_code,
                                                                  product.product_no)
+      product.version_id = version_id
+
       if res.data.product_id != None:
         log.debug("Created a product")
         product.id = res.data.product_id
-        product.version_name = version_name
         product.is_indexed = False
         update_product_by_id(product)
       elif res.data.modified_count > 0:
         log.debug("Existing product is updated")
-        product.version_name = version_name
         product.is_indexed = False
         update_product_by_hostcode_and_productno(product)
       else:
@@ -138,21 +138,21 @@ def notify_to_classify(host_code):
   rconn.lpush(REDIS_HOST_CLASSIFY_QUEUE, host_code)
 
 
-def dispatch_job(rconn, version_name):
+def dispatch_job(rconn, version_id):
   log.info('Start dispatch_job')
   Timer(HEALTH_CHECK_TIME, check_health, ()).start()
   while True:
     key, value = rconn.blpop([REDIS_HOST_CRAWL_QUEUE])
-    crawl(value.decode('utf-8'), version_name)
+    crawl(value.decode('utf-8'), version_id)
     global  heart_bit
     heart_bit = True
 
 
 if __name__ == '__main__':
   log.info('Start bl-crawler')
-  version_name = get_latest_crawl_version()
+  version_id = get_latest_crawl_version()
   try:
-    Process(target=dispatch_job, args=(rconn,version_name,)).start()
+    Process(target=dispatch_job, args=(rconn,version_id,)).start()
   except Exception as e:
     log.error(str(e))
     exit()
