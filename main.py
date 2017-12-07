@@ -9,7 +9,7 @@ from stylelens_product import Product
 from stylelens_product import ProductApi
 from stylelens_product.models.add_product_response import AddProductResponse
 from stylelens_product.rest import ApiException
-from stylelens_crawl import Crawler
+from stylelens_crawl.stylens_crawl import StylensCrawler
 from bluelens_log import Logging
 
 HEALTH_CHECK_TIME = 60 * 60 * 24
@@ -33,16 +33,16 @@ options = {
 }
 log = Logging(options, tag='bl-crawler')
 
-heart_bit = True
+# heart_bit = True
 
-def check_health():
-  global  heart_bit
-  log.info('check_health: ' + str(heart_bit))
-  if heart_bit == True:
-    heart_bit = False
-    Timer(HEALTH_CHECK_TIME, check_health, ()).start()
-  else:
-    exit()
+# def check_health():
+#   global  heart_bit
+#   log.info('check_health: ' + str(heart_bit))
+#   if heart_bit == True:
+#     heart_bit = False
+#     Timer(HEALTH_CHECK_TIME, check_health, ()).start()
+#   else:
+#     exit()
 
 def exit():
   log.info('exit: ' + SPAWN_ID)
@@ -56,7 +56,7 @@ def exit():
   spawn.delete(data)
 
 def get_latest_crawl_version():
-  key, value = rconn.hget(REDIS_CRAWL_VERSION, REDIS_CRAWL_VERSION_LATEST)
+  value = rconn.hget(REDIS_CRAWL_VERSION, REDIS_CRAWL_VERSION_LATEST)
   version_id = value.decode("utf-8")
   return version_id
 
@@ -64,10 +64,11 @@ def crawl(host_code, version_id):
   options = {}
   options['host_code'] = host_code
 
-  crawler = Crawler(options)
+  crawler = StylensCrawler(options)
 
   try:
-    items = crawler.run()
+    if crawler.start() == True:
+      items = crawler.get_items()
   except Exception as e:
     log.error(str(e))
     exit()
@@ -79,27 +80,27 @@ def crawl(host_code, version_id):
     product.host_url = item['host_url']
     product.host_code = item['host_code']
     product.host_name = item['host_name']
-    product.tags = item['tags']
-    product.currency_unit = item['currency_unit']
-    product.product_url = item['product_url']
     product.product_no = item['product_no']
-    product.nation = item['nation']
     product.main_image = item['main_image']
     product.sub_images = item['sub_images']
 
     try:
-      res = product_api.update_product_by_hostcode_and_productno(product,
-                                                                 host_code,
-                                                                 product.product_no)
+      res = product_api.update_product_by_hostcode_and_productno(host_code=host_code,
+                                                                 product_no=product.product_no,
+                                                                 body=product)
       product.version_id = version_id
+      product.product_url = item['product_url']
+      product.tags = item['tags']
+      product.currency_unit = item['currency_unit']
+      product.nation = item['nation']
 
-      if res.data.product_id != None:
-        log.debug("Created a product")
-        product.id = res.data.product_id
+      if res.created_count > 0:
+        log.debug("Created a product: " + res.product_id)
+        product.id = res.product_id
         product.is_indexed = False
         update_product_by_id(product)
-      elif res.data.modified_count > 0:
-        log.debug("Existing product is updated")
+      elif res.modified_count > 0:
+        log.debug("Existing product is updated: product_no:" + product.product_no)
         product.is_indexed = False
         update_product_by_hostcode_and_productno(product)
       else:
@@ -111,6 +112,7 @@ def crawl(host_code, version_id):
       exit()
 
   notify_to_classify(host_code)
+  exit()
 
 def update_product_by_id(product):
   log.debug('update_product_by_id:' + product.product_no)
@@ -118,7 +120,7 @@ def update_product_by_id(product):
 
   try:
     response = product_api.update_product_by_id(product.id, product)
-    log.debug(response)
+    # log.debug(response)
   except ApiException as e:
     log.error("Exception when calling ProductApi->update_product_by_id: %s\n" % e)
     exit()
@@ -129,7 +131,7 @@ def update_product_by_hostcode_and_productno(product):
 
   try:
     response = product_api.update_product_by_hostcode_and_productno(product.host_code, product.product_no, product)
-    log.debug(response)
+    # log.debug(response)
   except ApiException as e:
     log.error("Exception when calling ProductApi->update_product_by_hostcode_and_productno: %s\n" % e)
     exit()
@@ -137,15 +139,14 @@ def update_product_by_hostcode_and_productno(product):
 def notify_to_classify(host_code):
   rconn.lpush(REDIS_HOST_CLASSIFY_QUEUE, host_code)
 
-
 def dispatch_job(rconn, version_id):
   log.info('Start dispatch_job')
-  Timer(HEALTH_CHECK_TIME, check_health, ()).start()
+  # Timer(HEALTH_CHECK_TIME, check_health, ()).start()
   while True:
     key, value = rconn.blpop([REDIS_HOST_CRAWL_QUEUE])
     crawl(value.decode('utf-8'), version_id)
-    global  heart_bit
-    heart_bit = True
+    # global  heart_bit
+    # heart_bit = True
 
 
 if __name__ == '__main__':
