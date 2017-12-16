@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
 
 export ORG="bluelens"
-export IMAGE="bl-cropper"
-export TAG='latest'
-export NAMESPACE="index"
+export IMAGE="bl-crawler"
+export TAG='prod'
+export NAMESPACE="prod"
 
 docker login
 

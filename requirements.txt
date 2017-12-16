@@ -2,7 +2,7 @@ asn1crypto==0.23.0
 attrs==17.3.0
 Automat==0.6.0
 beautifulsoup4==4.6.0
-bluelens-log==1.0.1
+bluelens-log==1.0.2
 bluelens-spawning-pool==1.0.9
 certifi==2017.11.5
 cffi==1.11.2
@@ -30,8 +30,8 @@ Scrapy==1.4.0
 service-identity==17.0.0
 six==1.11.0
 slimit==0.8.1
-stylelens-crawl==0.0.109
-stylelens-product==1.0.22
+stylelens-crawl==0.0.115
+stylelens-product==1.0.24
 Twisted==17.9.0
 urllib3==1.22
 w3lib==1.18.0
