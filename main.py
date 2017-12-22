@@ -93,6 +93,10 @@ def crawl(host_code, version_id):
           product['price'] = item['price']
           product['currency_unit'] = item['currency_unit']
           product['nation'] = item['nation']
+          product['cate'] = item['cate']
+          product['sale_price'] = item['sale_price']
+          product['related_product'] = item['related_product']
+          product['thumbnail'] = item['thumbnail']
 
           if 'upserted' in res:
             product_id = str(res['upserted'])
