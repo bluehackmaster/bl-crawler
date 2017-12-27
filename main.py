@@ -9,6 +9,7 @@ from bluelens_spawning_pool import spawning_pool
 from stylelens_crawl.stylens_crawl import StylensCrawler
 from bluelens_log import Logging
 from stylelens_product.products import Products
+from stylelens_product.hosts import Hosts
 
 # HEALTH_CHECK_TIME = 60 * 60 * 24
 
@@ -19,6 +20,8 @@ REDIS_PRODUCT_IMAGE_PROCESS_QUEUE = 'bl:product:image:process:queue'
 REDIS_CRAWL_VERSION = 'bl:crawl:version'
 REDIS_CRAWL_VERSION_LATEST = 'latest'
 
+HOST_STATUS_DOING = 'doing'
+HOST_STATUS_DONE = 'done'
 
 SPAWN_ID = os.environ['SPAWN_ID']
 HOST_CODE = os.environ['HOST_CODE']
@@ -35,6 +38,7 @@ options = {
 log = Logging(options, tag='bl-crawler')
 
 product_api = None
+host_api = None
 
 # heart_bit = True
 
@@ -65,9 +69,20 @@ def get_latest_crawl_version():
     return version_id
   return None
 
+def save_status_on_host(host_code, status):
+  global host_api
+
+  host = {}
+  host['host_code'] = host_code
+  host['crawl_status'] = status
+
+  try:
+    host_api.update_host(host)
+  except Exception as e:
+    log.error(str(e))
+
 def crawl(host_code, version_id):
   global product_api
-  product_api = Products()
   options = {}
   log.setTag('bl-crawler-' + SPAWN_ID)
   log.debug('start crawl')
@@ -121,7 +136,6 @@ def crawl(host_code, version_id):
             update_product_by_hostcode_and_productno(product)
           else:
             log.debug("The product is same")
-            # product['is_processed']= True
             update_product_by_hostcode_and_productno(product)
         except Exception as e:
           log.error("Exception when calling ProductApi->update_product_by_hostcode_and_productno: %s\n" % e)
@@ -132,6 +146,7 @@ def crawl(host_code, version_id):
     delete_pod()
 
   notify_to_classify(host_code)
+  save_status_on_host(host_code, HOST_STATUS_DONE)
   delete_pod()
 
 def update_product_by_id(id, product):
@@ -167,11 +182,17 @@ def notify_to_classify(host_code):
 if __name__ == '__main__':
   log.info('Start bl-crawler:new6')
 
+  global product_api
+  global host_api
+  product_api = Products()
+  host_api = Hosts()
+
   signal.signal(signal.SIGTERM, keep_the_job)
 
   version_id = get_latest_crawl_version()
   if version_id is not None:
     try:
+      save_status_on_host(HOST_CODE, HOST_STATUS_DONE)
       crawl(HOST_CODE, version_id)
     except Exception as e:
       log.error(str(e))
