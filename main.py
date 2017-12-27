@@ -4,6 +4,7 @@ import redis
 import os
 # from multiprocessing import Process
 # from threading import Timer
+import signal
 from bluelens_spawning_pool import spawning_pool
 from stylelens_crawl.stylens_crawl import StylensCrawler
 from bluelens_log import Logging
@@ -13,6 +14,7 @@ from stylelens_product.products import Products
 
 REDIS_HOST_CLASSIFY_QUEUE = 'bl:host:classify:queue'
 REDIS_HOST_CRAWL_QUEUE = 'bl:host:crawl:queue'
+REDIS__QUEUE = 'bl:host:classify:queue'
 REDIS_PRODUCT_IMAGE_PROCESS_QUEUE = 'bl:product:image:process:queue'
 REDIS_CRAWL_VERSION = 'bl:crawl:version'
 REDIS_CRAWL_VERSION_LATEST = 'latest'
@@ -58,8 +60,10 @@ def delete_pod():
 
 def get_latest_crawl_version():
   value = rconn.hget(REDIS_CRAWL_VERSION, REDIS_CRAWL_VERSION_LATEST)
-  version_id = value.decode("utf-8")
-  return version_id
+  if value is not None:
+    version_id = value.decode("utf-8")
+    return version_id
+  return None
 
 def crawl(host_code, version_id):
   global product_api
@@ -93,10 +97,18 @@ def crawl(host_code, version_id):
           product['price'] = item['price']
           product['currency_unit'] = item['currency_unit']
           product['nation'] = item['nation']
-          product['cate'] = item['cate']
-          product['sale_price'] = item['sale_price']
-          product['related_product'] = item['related_product']
-          product['thumbnail'] = item['thumbnail']
+
+          if 'cate' in item:
+            product['cate'] = item['cate']
+
+          if 'sale_price' in item:
+            product['sale_price'] = item['sale_price']
+
+          if 'related_product' in item:
+            product['related_product'] = item['related_product']
+
+          if 'thumbnail' in item:
+            product['thumbnail'] = item['thumbnail']
 
           if 'upserted' in res:
             product_id = str(res['upserted'])
@@ -109,14 +121,14 @@ def crawl(host_code, version_id):
             update_product_by_hostcode_and_productno(product)
           else:
             log.debug("The product is same")
-            product['is_processed']= True
+            # product['is_processed']= True
             update_product_by_hostcode_and_productno(product)
         except Exception as e:
           log.error("Exception when calling ProductApi->update_product_by_hostcode_and_productno: %s\n" % e)
           # delete_pod()
 
   except Exception as e:
-    log.error("host_code:" + host_code + 'error: ' + str(e))
+    log.error("host_code:" + host_code + ' error: ' + str(e))
     delete_pod()
 
   notify_to_classify(host_code)
@@ -138,29 +150,31 @@ def update_product_by_hostcode_and_productno(product):
   global product_api
 
   try:
-    response = product_api.update_product_by_hostcode_and_productno(product['host_code'], product['product_no'], product)
+    response = product_api.update_product_by_hostcode_and_productno(product)
     # log.debug(response)
   except Exception as e:
-    log.error("Exception when calling ProductApi->update_product_by_hostcode_and_productno: %s\n" % e)
+    log.error("Exception when calling update_product_by_hostcode_and_productno: %s\n" % e)
     # delete_pod()
 
+def keep_the_job():
+  rconn.lpush(REDIS_HOST_CRAWL_QUEUE, HOST_CODE)
+  log.info('keep_the_job:' + HOST_CODE)
+
 def notify_to_classify(host_code):
+  log.info('notify_to_classify')
   rconn.lpush(REDIS_HOST_CLASSIFY_QUEUE, host_code)
 
-def dispatch_job(rconn, version_id):
-  log.info('Start dispatch_job')
-  # crawl('HC0001', "5a3bda9e4dfd7d90b88e5cde")
-  # Timer(HEALTH_CHECK_TIME, check_health, ()).start()
-  while True:
-    key, value = rconn.blpop([REDIS_HOST_CRAWL_QUEUE])
-    # global  heart_bit
-    # heart_bit = True
-
 if __name__ == '__main__':
-  log.info('Start bl-crawler:new5')
+  log.info('Start bl-crawler:new6')
+
+  signal.signal(signal.SIGTERM, keep_the_job)
+
   version_id = get_latest_crawl_version()
-  try:
-    crawl(HOST_CODE, version_id)
-  except Exception as e:
-    log.error(str(e))
+  if version_id is not None:
+    try:
+      crawl(HOST_CODE, version_id)
+    except Exception as e:
+      log.error(str(e))
+      delete_pod()
+  else:
     delete_pod()
