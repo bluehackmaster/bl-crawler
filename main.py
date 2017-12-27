@@ -20,6 +20,7 @@ REDIS_PRODUCT_IMAGE_PROCESS_QUEUE = 'bl:product:image:process:queue'
 REDIS_CRAWL_VERSION = 'bl:crawl:version'
 REDIS_CRAWL_VERSION_LATEST = 'latest'
 
+HOST_STATUS_TODO = 'todo'
 HOST_STATUS_DOING = 'doing'
 HOST_STATUS_DONE = 'done'
 
@@ -69,11 +70,12 @@ def get_latest_crawl_version():
     return version_id
   return None
 
-def save_status_on_host(host_code, status):
+def save_status_on_host(host_code, status, version_id):
   global host_api
 
   host = {}
   host['host_code'] = host_code
+  host['version_id'] = version_id
   host['crawl_status'] = status
 
   try:
@@ -192,7 +194,7 @@ if __name__ == '__main__':
   version_id = get_latest_crawl_version()
   if version_id is not None:
     try:
-      save_status_on_host(HOST_CODE, HOST_STATUS_DONE)
+      save_status_on_host(HOST_CODE, HOST_STATUS_DOING, version_id)
       crawl(HOST_CODE, version_id)
     except Exception as e:
       log.error(str(e))
