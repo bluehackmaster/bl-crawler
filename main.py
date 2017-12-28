@@ -10,6 +10,7 @@ from stylelens_crawl.stylens_crawl import StylensCrawler
 from bluelens_log import Logging
 from stylelens_product.products import Products
 from stylelens_product.hosts import Hosts
+from stylelens_product.crawls import Crawls
 
 # HEALTH_CHECK_TIME = 60 * 60 * 24
 
@@ -20,12 +21,13 @@ REDIS_PRODUCT_IMAGE_PROCESS_QUEUE = 'bl:product:image:process:queue'
 REDIS_CRAWL_VERSION = 'bl:crawl:version'
 REDIS_CRAWL_VERSION_LATEST = 'latest'
 
-HOST_STATUS_TODO = 'todo'
-HOST_STATUS_DOING = 'doing'
-HOST_STATUS_DONE = 'done'
+STATUS_TODO = 'todo'
+STATUS_DOING = 'doing'
+STATUS_DONE = 'done'
 
 SPAWN_ID = os.environ['SPAWN_ID']
 HOST_CODE = os.environ['HOST_CODE']
+VERSION_ID = os.environ['VERSION_ID']
 RELEASE_MODE = os.environ['RELEASE_MODE']
 REDIS_SERVER = os.environ['REDIS_SERVER']
 REDIS_PASSWORD = os.environ['REDIS_PASSWORD']
@@ -38,8 +40,9 @@ options = {
 }
 log = Logging(options, tag='bl-crawler')
 
-product_api = None
-host_api = None
+product_api = Products()
+host_api = Hosts()
+crawl_api = Crawls()
 
 # heart_bit = True
 
@@ -63,27 +66,19 @@ def delete_pod():
   spawn.setServerPassword(REDIS_PASSWORD)
   spawn.delete(data)
 
-def get_latest_crawl_version():
-  value = rconn.hget(REDIS_CRAWL_VERSION, REDIS_CRAWL_VERSION_LATEST)
-  if value is not None:
-    version_id = value.decode("utf-8")
-    return version_id
-  return None
+def save_status_on_crawl_job(host_code, status):
+  global crawl_api
 
-def save_status_on_host(host_code, status, version_id):
-  global host_api
-
-  host = {}
-  host['host_code'] = host_code
-  host['version_id'] = version_id
-  host['crawl_status'] = status
+  crawl = {}
+  crawl['host_code'] = host_code
+  crawl['status'] = status
 
   try:
-    host_api.update_host(host)
+    crawl_api.update_crawl_by_host_code(host_code, crawl)
   except Exception as e:
     log.error(str(e))
 
-def crawl(host_code, version_id):
+def crawl(host_code):
   global product_api
   options = {}
   log.setTag('bl-crawler-' + SPAWN_ID)
@@ -108,7 +103,7 @@ def crawl(host_code, version_id):
 
         try:
           res = product_api.update_product_by_hostcode_and_productno(product)
-          product['version_id'] = version_id
+          product['version_id'] = VERSION_ID
           product['product_url'] = item['product_url']
           product['tags'] = item['tags']
           product['price'] = item['price']
@@ -148,7 +143,7 @@ def crawl(host_code, version_id):
     delete_pod()
 
   notify_to_classify(host_code)
-  save_status_on_host(host_code, HOST_STATUS_DONE)
+  save_status_on_crawl_job(host_code, STATUS_DONE)
   delete_pod()
 
 def update_product_by_id(id, product):
@@ -184,20 +179,10 @@ def notify_to_classify(host_code):
 if __name__ == '__main__':
   log.info('Start bl-crawler:new6')
 
-  global product_api
-  global host_api
-  product_api = Products()
-  host_api = Hosts()
 
-  signal.signal(signal.SIGTERM, keep_the_job)
-
-  version_id = get_latest_crawl_version()
-  if version_id is not None:
-    try:
-      save_status_on_host(HOST_CODE, HOST_STATUS_DOING, version_id)
-      crawl(HOST_CODE, version_id)
-    except Exception as e:
-      log.error(str(e))
-      delete_pod()
-  else:
+  try:
+    save_status_on_crawl_job(HOST_CODE, STATUS_DOING)
+    crawl(HOST_CODE)
+  except Exception as e:
+    log.error(str(e))
     delete_pod()
