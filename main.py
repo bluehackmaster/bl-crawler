@@ -60,7 +60,8 @@ def delete_pod():
 
   data = {}
   data['namespace'] = RELEASE_MODE
-  data['id'] = SPAWN_ID
+  data['key'] = 'SPAWN_ID'
+  data['value'] = SPAWN_ID
   spawn = spawning_pool.SpawningPool()
   spawn.setServerUrl(REDIS_SERVER)
   spawn.setServerPassword(REDIS_PASSWORD)
@@ -99,7 +100,8 @@ def crawl(host_code):
         product['host_name'] = item['host_name']
         product['product_no'] = item['product_no']
         product['main_image'] = item['main_image']
-        product['sub_images'] = item['sub_images']
+        # product['sub_images'] = item['sub_images']
+        product['sub_images'] = None
 
         try:
           res = product_api.update_product_by_hostcode_and_productno(product)
@@ -126,10 +128,12 @@ def crawl(host_code):
             product_id = str(res['upserted'])
             log.debug("Created a product: " + product_id)
             product['is_processed'] = False
+            product['is_classified'] = False
             update_product_by_id(product_id, product)
           elif res['nModified'] > 0:
             log.debug("Existing product is updated: product_no:" + product['product_no'])
             product['is_processed']= False
+            product['is_classified'] = False
             update_product_by_hostcode_and_productno(product)
           else:
             log.debug("The product is same")
@@ -140,9 +144,8 @@ def crawl(host_code):
 
   except Exception as e:
     log.error("host_code:" + host_code + ' error: ' + str(e))
-    delete_pod()
 
-  notify_to_classify(host_code)
+  # notify_to_classify(host_code)
   save_status_on_crawl_job(host_code, STATUS_DONE)
   delete_pod()
 
@@ -177,8 +180,7 @@ def notify_to_classify(host_code):
   rconn.lpush(REDIS_HOST_CLASSIFY_QUEUE, host_code)
 
 if __name__ == '__main__':
-  log.info('Start bl-crawler:new6')
-
+  log.info('Start bl-crawler:3')
 
   try:
     save_status_on_crawl_job(HOST_CODE, STATUS_DOING)
