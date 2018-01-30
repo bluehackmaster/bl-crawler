@@ -136,6 +136,7 @@ def crawl(host_code):
             update_product_by_hostcode_and_productno(product)
           else:
             log.debug("The product is same")
+            product['is_classified'] = False
             update_product_by_hostcode_and_productno(product)
         except Exception as e:
           log.error("Exception when calling ProductApi->update_product_by_hostcode_and_productno: %s\n" % e)
