@@ -71,11 +71,10 @@ def save_status_on_crawl_job(host_code, status):
   global crawl_api
 
   crawl = {}
-  crawl['host_code'] = host_code
   crawl['status'] = status
 
   try:
-    crawl_api.update_crawl_by_host_code(host_code, crawl)
+    crawl_api.update_crawl_by_host_code(VERSION_ID, host_code, crawl)
   except Exception as e:
     log.error(str(e))
 
@@ -180,11 +179,12 @@ def notify_to_classify(host_code):
   rconn.lpush(REDIS_HOST_CLASSIFY_QUEUE, host_code)
 
 if __name__ == '__main__':
-  log.info('Start bl-crawler:3')
+  log.info('Start bl-crawler:4')
 
   try:
     save_status_on_crawl_job(HOST_CODE, STATUS_DOING)
     crawl(HOST_CODE)
+    # crawl("HC0253")
   except Exception as e:
     log.error(str(e))
     delete_pod()
