@@ -35,7 +35,7 @@ Scrapy==1.5.0
 service-identity==17.0.0
 six==1.11.0
 slimit==0.8.1
-stylelens-crawl==0.1.107
+stylelens-crawl==0.1.108
 stylelens-product==1.0.68
 Twisted==17.9.0
 uritemplate==3.0.0

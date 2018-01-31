@@ -27,6 +27,7 @@ STATUS_DONE = 'done'
 
 SPAWN_ID = os.environ['SPAWN_ID']
 HOST_CODE = os.environ['HOST_CODE']
+HOST_GROUP = os.environ['HOST_GROUP']
 VERSION_ID = os.environ['VERSION_ID']
 RELEASE_MODE = os.environ['RELEASE_MODE']
 REDIS_SERVER = os.environ['REDIS_SERVER']
@@ -78,7 +79,7 @@ def save_status_on_crawl_job(host_code, status):
   except Exception as e:
     log.error(str(e))
 
-def crawl(host_code):
+def crawl(host_code, host_group):
   global product_api
   options = {}
   log.setTag('bl-crawler-' + SPAWN_ID)
@@ -96,6 +97,7 @@ def crawl(host_code):
         product['name'] = item['name']
         product['host_url'] = item['host_url']
         product['host_code'] = item['host_code']
+        product['host_group'] = host_group
         product['host_name'] = item['host_name']
         product['product_no'] = item['product_no']
         product['main_image'] = item['main_image']
@@ -127,12 +129,12 @@ def crawl(host_code):
             product_id = str(res['upserted'])
             log.debug("Created a product: " + product_id)
             product['is_processed'] = False
-            product['is_classified'] = False
+            product['is_classified'] = None
             update_product_by_id(product_id, product)
           elif res['nModified'] > 0:
             log.debug("Existing product is updated: product_no:" + product['product_no'])
             product['is_processed']= False
-            product['is_classified'] = False
+            product['is_classified'] = None
             update_product_by_hostcode_and_productno(product)
           else:
             log.debug("The product is same")
@@ -180,11 +182,11 @@ def notify_to_classify(host_code):
   rconn.lpush(REDIS_HOST_CLASSIFY_QUEUE, host_code)
 
 if __name__ == '__main__':
-  log.info('Start bl-crawler:4')
+  log.info('Start bl-crawler:2')
 
   try:
     save_status_on_crawl_job(HOST_CODE, STATUS_DOING)
-    crawl(HOST_CODE)
+    crawl(HOST_CODE, HOST_GROUP)
     # crawl("HC0253")
   except Exception as e:
     log.error(str(e))
