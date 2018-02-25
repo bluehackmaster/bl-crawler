@@ -2,11 +2,14 @@ from __future__ import print_function
 
 import redis
 import os
+import time
+import traceback
 # from multiprocessing import Process
 # from threading import Timer
 import signal
 from bluelens_spawning_pool import spawning_pool
 from stylelens_crawl.stylens_crawl import StylensCrawler
+from stylelens_crawl_amazon import stylelens_crawl
 from bluelens_log import Logging
 from stylelens_product.products import Products
 from stylelens_product.hosts import Hosts
@@ -18,8 +21,6 @@ REDIS_HOST_CLASSIFY_QUEUE = 'bl:host:classify:queue'
 REDIS_HOST_CRAWL_QUEUE = 'bl:host:crawl:queue'
 REDIS__QUEUE = 'bl:host:classify:queue'
 REDIS_PRODUCT_IMAGE_PROCESS_QUEUE = 'bl:product:image:process:queue'
-REDIS_CRAWL_VERSION = 'bl:crawl:version'
-REDIS_CRAWL_VERSION_LATEST = 'latest'
 
 STATUS_TODO = 'todo'
 STATUS_DOING = 'doing'
@@ -58,7 +59,6 @@ crawl_api = Crawls()
 
 def delete_pod():
   log.info('delete_pod: ' + SPAWN_ID)
-
   data = {}
   data['namespace'] = RELEASE_MODE
   data['key'] = 'SPAWN_ID'
@@ -78,6 +78,56 @@ def save_status_on_crawl_job(host_code, status):
     crawl_api.update_crawl_by_host_code(VERSION_ID, host_code, crawl)
   except Exception as e:
     log.error(str(e))
+
+def crawl_amazon(host_code, host_group):
+  global product_api
+  log.setTag('bl-crawler-' + SPAWN_ID)
+  log.debug('start crawl')
+  crawler = stylelens_crawl.StylensCrawler()
+  items = crawler.get_items()
+  get_items(items, host_code, host_group)
+
+  similar_items = crawler.get_similar_items()
+  get_items(similar_items, host_code, host_group)
+
+def get_items(items, host_code, host_group):
+  for item in items:
+    try:
+      product = item.to_dict()
+      product['name'] = item.title
+      continue
+      product['host_url'] = 'https://www.amazon.com'
+      product['host_code'] = host_code
+      product['host_group'] = host_group
+      product['host_name'] = 'amazon'
+      product['product_no'] = item.asin
+      product['main_image'] = item.l_image.url
+      # product['sub_images'] = item['sub_images']
+      product['sub_images'] = None
+      try:
+        res = product_api.update_product_by_hostcode_and_productno(product)
+        product['version_id'] = VERSION_ID
+        product['product_url'] = item.detail_page_link
+        product['tags'] = item.features
+        product['nation'] = 'us'
+
+        if 'upserted' in res:
+          product_id = str(res['upserted'])
+          log.debug("Created a product: " + product_id)
+          product['is_processed'] = False
+          update_product_by_id(product_id, product)
+        elif res['nModified'] > 0:
+          log.debug("Existing product is updated: product_no:" + product['product_no'])
+          product['is_processed']= False
+          update_product_by_hostcode_and_productno(product)
+        else:
+          log.debug("The product is same")
+          update_product_by_hostcode_and_productno(product)
+      except Exception as e:
+        log.error("Exception when calling ProductApi->update_product_by_hostcode_and_productno: %s\n" % e)
+    except Exception as e:
+      log.error("Exception(for): " + str(e))
+      continue
 
 def crawl(host_code, host_group):
   global product_api
@@ -129,16 +179,13 @@ def crawl(host_code, host_group):
             product_id = str(res['upserted'])
             log.debug("Created a product: " + product_id)
             product['is_processed'] = False
-            product['is_classified'] = None
             update_product_by_id(product_id, product)
           elif res['nModified'] > 0:
             log.debug("Existing product is updated: product_no:" + product['product_no'])
             product['is_processed']= False
-            product['is_classified'] = None
             update_product_by_hostcode_and_productno(product)
           else:
             log.debug("The product is same")
-            product['is_classified'] = None
             update_product_by_hostcode_and_productno(product)
         except Exception as e:
           log.error("Exception when calling ProductApi->update_product_by_hostcode_and_productno: %s\n" % e)
@@ -182,12 +229,17 @@ def notify_to_classify(host_code):
   rconn.lpush(REDIS_HOST_CLASSIFY_QUEUE, host_code)
 
 if __name__ == '__main__':
-  log.info('Start bl-crawler:2')
+  log.info('Start bl-crawler:5')
 
   try:
     save_status_on_crawl_job(HOST_CODE, STATUS_DOING)
-    crawl(HOST_CODE, HOST_GROUP)
-    # crawl("HC0253")
+    if HOST_GROUP == 'HG8000':
+      crawl_amazon(HOST_CODE, HOST_GROUP)
+    else:
+      crawl(HOST_CODE, HOST_GROUP)
   except Exception as e:
+    log.error('global exception')
+    log.error(e)
     log.error(str(e))
+    traceback.print_exc(limit=None)
     delete_pod()
