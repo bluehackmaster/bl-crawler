@@ -2,6 +2,7 @@ asn1crypto==0.24.0
 attrs==17.4.0
 Automat==0.6.0
 beautifulsoup4==4.6.0
+bluelens-k8s==0.0.3
 bluelens-log==1.0.2
 bluelens-spawning-pool==1.0.10
 bottlenose==1.1.8
@@ -38,7 +39,7 @@ service-identity==17.0.0
 six==1.11.0
 slimit==0.8.1
 stylelens-crawl==0.1.108
-stylelens-crawl-amazon==0.0.18
+stylelens-crawl-amazon==0.0.33
 stylelens-product==1.0.68
 Twisted==17.9.0
 uritemplate==3.0.0

@@ -2,25 +2,27 @@ from __future__ import print_function
 
 import redis
 import os
-import time
 import traceback
-# from multiprocessing import Process
-# from threading import Timer
-import signal
+import pickle
+import time
 from bluelens_spawning_pool import spawning_pool
 from stylelens_crawl.stylens_crawl import StylensCrawler
 from stylelens_crawl_amazon import stylelens_crawl
+from stylelens_crawl_amazon.item_search import ItemSearch
+from stylelens_crawl_amazon.model.item_search_data import ItemSearchData
 from bluelens_log import Logging
 from stylelens_product.products import Products
 from stylelens_product.hosts import Hosts
 from stylelens_product.crawls import Crawls
+from bluelens_k8s.pod import Pod
 
 # HEALTH_CHECK_TIME = 60 * 60 * 24
 
 REDIS_HOST_CLASSIFY_QUEUE = 'bl:host:classify:queue'
 REDIS_HOST_CRAWL_QUEUE = 'bl:host:crawl:queue'
 REDIS__QUEUE = 'bl:host:classify:queue'
-REDIS_PRODUCT_IMAGE_PROCESS_QUEUE = 'bl:product:image:process:queue'
+REDIS_CRAWL_AMZ_QUEUE = "bl:crawl:amz:queue"
+REDIS_TICKER_KEY = "bl:ticker:crawl:amazon"
 
 STATUS_TODO = 'todo'
 STATUS_DOING = 'doing'
@@ -57,6 +59,12 @@ crawl_api = Crawls()
 #   else:
 #     delete_pod()
 
+
+
+class Crawler(Pod):
+  def __init__(self):
+    super().__init__(REDIS_SERVER, REDIS_PASSWORD, rconn, log)
+
 def delete_pod():
   log.info('delete_pod: ' + SPAWN_ID)
   data = {}
@@ -79,23 +87,41 @@ def save_status_on_crawl_job(host_code, status):
   except Exception as e:
     log.error(str(e))
 
+def wait_tick():
+  rconn.blpop([REDIS_TICKER_KEY])
+
 def crawl_amazon(host_code, host_group):
-  global product_api
   log.setTag('bl-crawler-' + SPAWN_ID)
   log.debug('start crawl')
+  global product_api
   crawler = stylelens_crawl.StylensCrawler()
-  items = crawler.get_items()
-  get_items(items, host_code, host_group)
 
-  similar_items = crawler.get_similar_items()
-  get_items(similar_items, host_code, host_group)
+  while True:
+    wait_tick()
+    key, value = rconn.blpop([REDIS_CRAWL_AMZ_QUEUE])
+    search_data = pickle.loads(value)
+    item_search = ItemSearch()
+    item_search.search_data = ItemSearchData().from_dict(search_data)
+    its = []
+    its.append(item_search)
+    items = crawler.get_items(its)
+
+    while True:
+      ret = get_items(items, host_code, host_group)
+      time.sleep(1)
+      if ret == True:
+        break
+
+    # similar_items = crawler.get_similar_items()
+    # get_items(similar_items, host_code, host_group)
 
 def get_items(items, host_code, host_group):
   for item in items:
     try:
+      if item is None:
+        return False
       product = item.to_dict()
       product['name'] = item.title
-      continue
       product['host_url'] = 'https://www.amazon.com'
       product['host_code'] = host_code
       product['host_group'] = host_group
@@ -114,11 +140,11 @@ def get_items(items, host_code, host_group):
         if 'upserted' in res:
           product_id = str(res['upserted'])
           log.debug("Created a product: " + product_id)
-          product['is_processed'] = False
+          product['is_processed'] = True
           update_product_by_id(product_id, product)
         elif res['nModified'] > 0:
           log.debug("Existing product is updated: product_no:" + product['product_no'])
-          product['is_processed']= False
+          product['is_processed'] = True
           update_product_by_hostcode_and_productno(product)
         else:
           log.debug("The product is same")
@@ -127,7 +153,9 @@ def get_items(items, host_code, host_group):
         log.error("Exception when calling ProductApi->update_product_by_hostcode_and_productno: %s\n" % e)
     except Exception as e:
       log.error("Exception(for): " + str(e))
-      continue
+      return False
+
+  return True
 
 def crawl(host_code, host_group):
   global product_api
