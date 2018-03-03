@@ -127,6 +127,9 @@ def get_items(items, host_code, host_group):
       product['host_group'] = host_group
       product['host_name'] = 'amazon'
       product['product_no'] = item.asin
+      price_dic = product.get('price')
+      if price_dic != None:
+        product['price']['amount'] = int(price_dic.get('amount'))
       product['main_image'] = item.l_image.url
       # product['sub_images'] = item['sub_images']
       product['sub_images'] = None
