@@ -106,16 +106,20 @@ def crawl_amazon(host_code, host_group):
     its.append(item_search)
     items = crawler.get_items(its)
 
-    while True:
-      ret = get_items(items, host_code, host_group)
-      time.sleep(1)
-      if ret == True:
-        break
+    products = get_products(items, host_code, host_group)
 
+    if products != None:
+      try:
+        r = product_api.add_products(products)
+        log.debug("inserted : " + str(len(r)))
+      except Exception as e:
+        log.error("Exception when calling Products.add_products() : " + str(e))
     # similar_items = crawler.get_similar_items()
-    # get_items(similar_items, host_code, host_group)
+    # get_products(similar_items, host_code, host_group)
 
-def get_items(items, host_code, host_group):
+def get_products(items, host_code, host_group):
+  products = []
+
   for item in items:
     try:
       if item is None:
@@ -133,32 +137,17 @@ def get_items(items, host_code, host_group):
       product['main_image'] = item.l_image.url
       # product['sub_images'] = item['sub_images']
       product['sub_images'] = None
-      try:
-        res = product_api.update_product_by_hostcode_and_productno(product)
-        product['version_id'] = VERSION_ID
-        product['product_url'] = item.detail_page_link
-        product['tags'] = item.features
-        product['nation'] = 'us'
-
-        if 'upserted' in res:
-          product_id = str(res['upserted'])
-          log.debug("Created a product: " + product_id)
-          product['is_processed'] = True
-          update_product_by_id(product_id, product)
-        elif res['nModified'] > 0:
-          log.debug("Existing product is updated: product_no:" + product['product_no'])
-          product['is_processed'] = True
-          update_product_by_hostcode_and_productno(product)
-        else:
-          log.debug("The product is same")
-          update_product_by_hostcode_and_productno(product)
-      except Exception as e:
-        log.error("Exception when calling ProductApi->update_product_by_hostcode_and_productno: %s\n" % e)
+      product['version_id'] = VERSION_ID
+      product['product_url'] = item.detail_page_link
+      product['tags'] = item.features
+      product['nation'] = 'us'
+      product['is_processed'] = True
+      products.append(product)
     except Exception as e:
-      log.error("Exception(for): " + str(e))
-      return False
+      log.error("Exception when calling ProductApi->add_products: %s\n" % e)
+      return None
 
-  return True
+  return products
 
 def crawl(host_code, host_group):
   global product_api
@@ -260,7 +249,7 @@ def notify_to_classify(host_code):
   rconn.lpush(REDIS_HOST_CLASSIFY_QUEUE, host_code)
 
 if __name__ == '__main__':
-  log.info('Start bl-crawler:5')
+  log.info('Start bl-crawler:3')
 
   try:
     save_status_on_crawl_job(HOST_CODE, STATUS_DOING)
