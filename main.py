@@ -110,8 +110,7 @@ def crawl_amazon(host_code, host_group):
 
     if products != None:
       try:
-        r = product_api.add_products(products)
-        log.debug("inserted : " + str(len(r)))
+        product_api.add_products(products)
       except Exception as e:
         log.error("Exception when calling Products.add_products() : " + str(e))
     # similar_items = crawler.get_similar_items()
@@ -134,6 +133,21 @@ def get_products(items, host_code, host_group):
       price_dic = product.get('price')
       if price_dic != None:
         product['price']['amount'] = int(price_dic.get('amount'))
+        product['price']['currency_code'] = price_dic.get('currency_code')
+        product['price']['formatted_price'] = price_dic.get('formatted_price')
+      lowest_price_dic = product.get('lowest_price')
+      if lowest_price_dic != None:
+        product['lowest_price']['amount'] = int(lowest_price_dic.get('amount'))
+        product['lowest_price']['currency_code'] = lowest_price_dic.get('currency_code')
+        product['lowest_price']['formatted_price'] = lowest_price_dic.get('formatted_price')
+      highest_price_dic = product.get('highest_price')
+      if highest_price_dic != None:
+        product['highest_price']['amount'] = int(highest_price_dic.get('amount'))
+        product['highest_price']['currency_code'] = highest_price_dic.get('currency_code')
+        product['highest_price']['formatted_price'] = highest_price_dic.get('formatted_price')
+
+      if price_dic == None and lowest_price_dic == None:
+        continue
       product['main_image'] = item.l_image.url
       # product['sub_images'] = item['sub_images']
       product['sub_images'] = None
@@ -249,7 +263,7 @@ def notify_to_classify(host_code):
   rconn.lpush(REDIS_HOST_CLASSIFY_QUEUE, host_code)
 
 if __name__ == '__main__':
-  log.info('Start bl-crawler:3')
+  log.info('Start bl-crawler:1')
 
   try:
     save_status_on_crawl_job(HOST_CODE, STATUS_DOING)
